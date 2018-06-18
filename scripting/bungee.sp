@@ -293,7 +293,7 @@ public Action Command_Bungee2(int client, int args){
 			//new Handle:tr; tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SOLID, RayType_Infinite, TraceRayHitAnyThing, client);
 			Handle tr;
 			tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
-			if (TR_DidHit(tr)){
+			if (TR_DidHit(tr) && IsValidEntity(TR_GetEntityIndex(tr))){
 				ropeHookedEnt[client][1] = TR_GetEntityIndex(tr);
 				bool go = true;
 				if (IsValidEntity(ropeHookedEnt[client][1])){
