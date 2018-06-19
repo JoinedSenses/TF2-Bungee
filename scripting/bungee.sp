@@ -293,7 +293,7 @@ public Action Command_Bungee2(int client, int args){
 			//new Handle:tr; tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SOLID, RayType_Infinite, TraceRayHitAnyThing, client);
 			Handle tr;
 			tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
-			if (TR_DidHit(tr) && IsValidEntity(TR_GetEntityIndex(tr))){
+			if (TR_DidHit(tr)){
 				ropeHookedEnt[client][1] = TR_GetEntityIndex(tr);
 				bool go = true;
 				if (IsValidEntity(ropeHookedEnt[client][1])){
@@ -366,7 +366,7 @@ public void OnGameFrame(){
 
 					if (roping[i][0]){
 						//ShowActivity2(0, "\x04[DEBUG]", "\x01 Bungee OnGameFrame, orig [%.2f %.2f %.2f], ropePoint [%.2f %.2f %.2f]", ori[0], ori[1], ori[2], ropePoint[i][0][0], ropePoint[i][0][1], ropePoint[i][0][2]);
-						if (ropeHookedEnt[i][0] != -1){
+						if (ropeHookedEnt[i][0] != -1 && IsValidEntity(ropeHookedEnt[i][0])){
 							float tempLoc[3];
 							Entity_GetAbsOrigin(ropeHookedEnt[i][0], tempLoc);
 							if (!Math_VectorsEqual(hookedEntLastLoc[i][0], tempLoc)){
