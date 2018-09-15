@@ -81,9 +81,9 @@ public void OnPluginStart() {
 }
 
 Action timerLateLoad(Handle timer) {
-		g_bWaitCheck[0] = true;
-		g_bWaitCheck[1] = true;
-		g_bWaitPeriodOver = true;
+	g_bWaitCheck[0] = true;
+	g_bWaitCheck[1] = true;
+	g_bWaitPeriodOver = true;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max) {
@@ -171,7 +171,7 @@ public Action Command_BColor(int client, int args) {
 	g_iBeamCustom[client][2] = b;
 	g_iBeamCustom[client][3] = 255;
 
-	ReplyToCommand(client, "\x01[\x03Bungee\x01]    \x07%s%s\x01    | \x07%02X0000R: %i\x01 | \x0700%02X00G: %i\x01 | \x070000%02XB: %i", hex, hex, r, r, g, g, b, b);
+	PrintToChat(client, "\x01[\x03Bungee\x01]    \x07%s%s\x01    | \x07%02X0000R: %i\x01 | \x0700%02X00G: %i\x01 | \x070000%02XB: %i", hex, hex, r, r, g, g, b, b);
 
 	if (r < 10 && g < 10 && b < 10) {
 		g_bCustomColor[client] = false;
