@@ -118,7 +118,7 @@ public Action Event_RoundActive(Event event, const char[] name, bool dontBroadca
 	int i = -1;
 	int team_round_timer = FindEntityByClassname(i, "team_round_timer");
 	if (IsValidEntity(team_round_timer)) {
-		if (GetEntData(team_round_timer,m_nSetupTimeLength) > 0) {
+		if (GetEntData(team_round_timer, m_nSetupTimeLength) > 0) {
 			g_bWaitCheck[1] = false;
 		}
 		else {
@@ -232,8 +232,8 @@ public Action Command_Bungee(int client, int args) {
 			GetClientEyePosition(client, eyeOri);
 			GetClientAbsAngles(client, ang);
 			GetClientEyeAngles(client, eyeAng);
-			Handle tr;
-			tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
+
+			Handle tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
 			if (TR_DidHit(tr)) {
 				g_iRopeHookedEnt[client][0] = TR_GetEntityIndex(tr);
 				bool go = true;
@@ -497,5 +497,5 @@ bool CheckClass(int client) {
 	}
 	char sClass[32];
 	cvarClassReq.GetString(sClass, sizeof(sClass));
-	return (view_as<int>(TF2_GetPlayerClass(client)) == view_as<int>(TF2_GetClass(sClass)) || view_as<int>(TF2_GetClass(sClass)) == 0);
+	return (TF2_GetPlayerClass(client) == TF2_GetClass(sClass) || TF2_GetClass(sClass) == TFClass_Unknown);
 }
