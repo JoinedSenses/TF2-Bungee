@@ -4,7 +4,7 @@
 #include <smlib/entities>
 #include <smlib/math>
 #pragma newdecls required
-#define PLUGIN_VERSION "1.0.3"
+#define PLUGIN_VERSION "1.0.4"
 
 float
 	  g_fRopePoint[MAXPLAYERS+1][2][3]
@@ -20,11 +20,8 @@ int
 bool
 	  g_bDoHook
 	, g_bCanRope[MAXPLAYERS+1][2]
-	, g_bWaitCheck[2]
-	, g_bWaitPeriodOver
 	, g_bRoping[MAXPLAYERS+1][2]
-	, g_bCustomColor[MAXPLAYERS+1]
-	, g_bLateLoad;
+	, g_bCustomColor[MAXPLAYERS+1];
 ConVar
 	  cvarRopeLength
 	, cvarHeightOffset
@@ -49,15 +46,7 @@ public void OnPluginStart() {
 	RegConsoleCmd("-bungee", Command_UnBungee);
 	RegConsoleCmd("+bungee2", Command_Bungee2);
 	RegConsoleCmd("-bungee2", Command_UnBungee2);
-	RegConsoleCmd("sm_forcebungeestart", Command_ForceStart);
 	RegConsoleCmd("sm_bcolor", Command_BColor);
-
-	HookEvent("teamplay_round_start", RoundStart);
-	HookEvent("teamplay_round_active", Event_RoundActive);
-	HookEvent("teamplay_setup_finished",Event_Setup);
-	HookEvent("teamplay_round_stalemate", RoundEnd);
-	HookEvent("teamplay_round_win", RoundEnd);
-	HookEvent("teamplay_game_over", RoundEnd);
 
 	CreateConVar("sm_bungee_version", PLUGIN_VERSION, "Bungee Version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 
@@ -74,74 +63,10 @@ public void OnPluginStart() {
 	HookEntityOutput("trigger_teleport", "OnStartTouch", EntityOutput_OnTrigger);
 
 	initialize();
-
-	if (g_bLateLoad) {
-		CreateTimer(3.0, timerLateLoad);
-	}
-}
-
-Action timerLateLoad(Handle timer) {
-	g_bWaitCheck[0] = true;
-	g_bWaitCheck[1] = true;
-	g_bWaitPeriodOver = true;
-}
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max) {
-	g_bLateLoad = late;
-	return APLRes_Success;
 }
 
 public void OnMapStart() {
 	initialize();
-}
-
-public void TF2_OnWaitingForPlayersEnd() {
-	g_bWaitCheck[0] = true;
-	if (g_bWaitCheck[0] && g_bWaitCheck[1]) {
-		g_bWaitPeriodOver = true;
-	}
-	LogMessage("TF2_OnWaitingForPlayersEnd; waitCheck=[%d %d]", g_bWaitCheck[0], g_bWaitCheck[1]);
-}
-
-public Action RoundStart(Event event, const char[] name, bool dontBroadcast) {
-	g_bWaitCheck[1] = false;
-	g_bWaitPeriodOver = false;
-}
-
-public Action RoundEnd(Event event, const char[] name, bool dontBroadcast) {
-	g_bWaitCheck[1] = false;
-	g_bWaitPeriodOver = false;
-}
-
-public Action Event_RoundActive(Event event, const char[] name, bool dontBroadcast) {
-	int m_nSetupTimeLength = FindSendPropInfo("CTeamRoundTimer", "m_nSetupTimeLength");
-	int i = -1;
-	int team_round_timer = FindEntityByClassname(i, "team_round_timer");
-	if (IsValidEntity(team_round_timer)) {
-		if (GetEntData(team_round_timer, m_nSetupTimeLength) > 0) {
-			g_bWaitCheck[1] = false;
-		}
-		else {
-			g_bWaitCheck[1] = true;
-			LogMessage("Event_RoundActive; waitCheck=[%d %d]", g_bWaitCheck[0], g_bWaitCheck[1]);
-			if (g_bWaitCheck[0] && g_bWaitCheck[1]) {
-				g_bWaitPeriodOver = true;
-			}
-		}
-	}
-}
-
-public Action Event_Setup(Event event, const char[] name, bool dontBroadcast) {
-	LogMessage("Event_Setup; waitCheck=[%d %d]", g_bWaitCheck[0], g_bWaitCheck[1]);
-	g_bWaitCheck[1] = true;
-	if (g_bWaitCheck[0] && g_bWaitCheck[1]) {
-		g_bWaitPeriodOver = true;
-	}
-}
-
-public void OnMapEnd() {
-	g_bWaitCheck[0] = g_bWaitCheck[1] =  false;
-	g_bWaitPeriodOver = false;
 }
 
 public Action Command_BColor(int client, int args) {
@@ -212,14 +137,8 @@ public Action CanRope2(Handle timer, Handle client) {
 	return Plugin_Handled;
 }
 
-public Action Command_ForceStart(int client, int args) {
-	g_bWaitCheck[0] = g_bWaitCheck[1] = true;
-	g_bWaitPeriodOver = true;
-	return Plugin_Handled;
-}
-
 public Action Command_Bungee(int client, int args) {
-	if (CheckClass(client) && g_bCanRope[client][0] && g_bWaitPeriodOver) {
+	if (CheckClass(client) && g_bCanRope[client][0]) {
 		int adminreq = GetConVarInt(cvarAdminReq);
 		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
 			float ori[3];
@@ -276,7 +195,7 @@ public Action Command_Bungee(int client, int args) {
 }
 
 public Action Command_UnBungee(int client, int args) {
-	if (CheckClass(client) && g_bWaitPeriodOver) {
+	if (CheckClass(client)) {
 		int adminreq = GetConVarInt(cvarAdminReq);
 		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
 			g_iRopeHookedEnt[client][0] = -1;
@@ -287,7 +206,7 @@ public Action Command_UnBungee(int client, int args) {
 }
 
 public Action Command_Bungee2(int client, int args) {
-	if (CheckClass(client) && g_bCanRope[client][1] && g_bWaitPeriodOver) {
+	if (CheckClass(client) && g_bCanRope[client][1]) {
 		int adminreq = GetConVarInt(cvarAdminReq);
 		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
 			float ori[3];
@@ -346,7 +265,7 @@ public Action Command_Bungee2(int client, int args) {
 }
 
 public Action Command_UnBungee2(int client, int args) {
-	if (CheckClass(client) && g_bWaitPeriodOver) {
+	if (CheckClass(client)) {
 		int adminreq = GetConVarInt(cvarAdminReq);
 		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
 			g_iRopeHookedEnt[client][1] = -1;
@@ -357,87 +276,85 @@ public Action Command_UnBungee2(int client, int args) {
 }
 
 public void OnGameFrame() {
-	if (g_bWaitPeriodOver) {
-		float extend = cvarRopeExtend.FloatValue;
-		float power = cvarRopePower.FloatValue;
-		float height = cvarHeightOffset.FloatValue;
-		float boost = cvarContractBoost.FloatValue;
-		float groundRes = cvarGroundRes.FloatValue;
+	float extend = cvarRopeExtend.FloatValue;
+	float power = cvarRopePower.FloatValue;
+	float height = cvarHeightOffset.FloatValue;
+	float boost = cvarContractBoost.FloatValue;
+	float groundRes = cvarGroundRes.FloatValue;
 
-		for (int i = 1; i < MaxClients; i++) {
-			if (IsClientInGame(i) && !IsFakeClient(i) && IsPlayerAlive(i) && (g_bRoping[i][0] || g_bRoping[i][1])) {
-				if (g_bRoping[i][0] || g_bRoping[i][1]) {
-					float ori[3];
-					float vel[3];
-					float dis[2] = { -1.0, -1.0 };
-					float tempVec[2][3];
-					bool go[2];
-					
-					GetClientAbsOrigin(i, ori);
-					ori[2] += height;
+	for (int i = 1; i < MaxClients; i++) {
+		if (IsClientInGame(i) && !IsFakeClient(i) && IsPlayerAlive(i) && (g_bRoping[i][0] || g_bRoping[i][1])) {
+			if (g_bRoping[i][0] || g_bRoping[i][1]) {
+				float ori[3];
+				float vel[3];
+				float dis[2] = { -1.0, -1.0 };
+				float tempVec[2][3];
+				bool go[2];
+				
+				GetClientAbsOrigin(i, ori);
+				ori[2] += height;
 
-					Entity_GetAbsVelocity(i, vel);
+				Entity_GetAbsVelocity(i, vel);
 
-					for (int j = 0; j < 2; j++) {
-						if (g_bRoping[i][j] && IsValidEntity(g_iRopeHookedEnt[i][j])) {
-							float tempLoc[3];
-							Entity_GetAbsOrigin(g_iRopeHookedEnt[i][j], tempLoc);
-							if (!Math_VectorsEqual(g_fHookedEntLastLoc[i][j], tempLoc)) {
-								float tempDiff[3];
-								SubtractVectors(tempLoc, g_fHookedEntLastLoc[i][j], tempDiff);
-								AddVectors(g_fRopePoint[i][j], tempDiff, g_fRopePoint[i][j]);
-								for (int k = 0; k < 3; k++) {
-									g_fHookedEntLastLoc[i][j][k] = tempLoc[k];
-								}
+				for (int j = 0; j < 2; j++) {
+					if (g_bRoping[i][j] && IsValidEntity(g_iRopeHookedEnt[i][j])) {
+						float tempLoc[3];
+						Entity_GetAbsOrigin(g_iRopeHookedEnt[i][j], tempLoc);
+						if (!Math_VectorsEqual(g_fHookedEntLastLoc[i][j], tempLoc)) {
+							float tempDiff[3];
+							SubtractVectors(tempLoc, g_fHookedEntLastLoc[i][j], tempDiff);
+							AddVectors(g_fRopePoint[i][j], tempDiff, g_fRopePoint[i][j]);
+							for (int k = 0; k < 3; k++) {
+								g_fHookedEntLastLoc[i][j][k] = tempLoc[k];
 							}
 						}
-						dis[j] = GetVectorDistance(ori, g_fRopePoint[i][j]);
 					}
-					for (int j = 0; j < 2; j++) {
-						if ((extend == -1.0 || dis[j] < g_fRopeDistance[i][j]*extend) && g_bRoping[i][j] && dis[j] != -1.0) {
-							if (dis[j] > g_fRopeDistance[i][j]) {
-								SubtractVectors(g_fRopePoint[i][j], ori, tempVec[j]);
-								NormalizeVector(tempVec[j], tempVec[j]);
+					dis[j] = GetVectorDistance(ori, g_fRopePoint[i][j]);
+				}
+				for (int j = 0; j < 2; j++) {
+					if ((extend == -1.0 || dis[j] < g_fRopeDistance[i][j]*extend) && g_bRoping[i][j] && dis[j] != -1.0) {
+						if (dis[j] > g_fRopeDistance[i][j]) {
+							SubtractVectors(g_fRopePoint[i][j], ori, tempVec[j]);
+							NormalizeVector(tempVec[j], tempVec[j]);
 
-								float tempDis = dis[j]-g_fRopeDistance[i][j];
-								ScaleVector(tempVec[j], tempDis);
+							float tempDis = dis[j] - g_fRopeDistance[i][j];
+							ScaleVector(tempVec[j], tempDis);
 
-								if (power != 1.0) {
-									ScaleVector(tempVec[j], power);
-								}
-								if (GetEntityFlags(i) & FL_ONGROUND) {
-									ScaleVector(tempVec[j], groundRes);
-								}
-								go[j] = true;
+							if (power != 1.0) {
+								ScaleVector(tempVec[j], power);
 							}
-							BeamIt(i, ori, j);
+							if (GetEntityFlags(i) & FL_ONGROUND) {
+								ScaleVector(tempVec[j], groundRes);
+							}
+							go[j] = true;
 						}
-						else {
-							g_bRoping[i][j] = false;
-						}
+						BeamIt(i, ori, j);
 					}
-					if (go[0] && go[1]) {
-						AddVectors(tempVec[0], tempVec[1], tempVec[0]);
-						if (boost != 1.0) {
-							ScaleVector(vel, boost);
-						}
-						AddVectors(tempVec[0], vel, vel);
-						Entity_SetAbsVelocity(i, vel);
+					else {
+						g_bRoping[i][j] = false;
 					}
-					else if (go[0] && !go[1]) {
-						if (boost != 1.0) {
-							ScaleVector(vel, boost);
-						}
-						AddVectors(tempVec[0], vel, vel);
-						Entity_SetAbsVelocity(i, vel);
+				}
+				if (go[0] && go[1]) {
+					AddVectors(tempVec[0], tempVec[1], tempVec[0]);
+					if (boost != 1.0) {
+						ScaleVector(vel, boost);
 					}
-					else if (!go[0] && go[1]) {
-						if (boost != 1.0) {
-							ScaleVector(vel, boost);
-						}
-						AddVectors(tempVec[1], vel, vel);
-						Entity_SetAbsVelocity(i, vel);
+					AddVectors(tempVec[0], vel, vel);
+					Entity_SetAbsVelocity(i, vel);
+				}
+				else if (go[0] && !go[1]) {
+					if (boost != 1.0) {
+						ScaleVector(vel, boost);
 					}
+					AddVectors(tempVec[0], vel, vel);
+					Entity_SetAbsVelocity(i, vel);
+				}
+				else if (!go[0] && go[1]) {
+					if (boost != 1.0) {
+						ScaleVector(vel, boost);
+					}
+					AddVectors(tempVec[1], vel, vel);
+					Entity_SetAbsVelocity(i, vel);
 				}
 			}
 		}
@@ -464,8 +381,6 @@ void initialize() {
 	}
 	g_iBeamSprite = PrecacheModel("materials/sprites/laser.vmt");
 	g_iHaloSprite = PrecacheModel("materials/sprites/halo01.vmt");
-	g_bWaitCheck[0] = g_bWaitCheck[1] = false;
-	g_bWaitPeriodOver = false;
 	CheckHook();
 }
 
