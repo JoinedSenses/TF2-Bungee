@@ -320,68 +320,80 @@ void SetCookieColor(int client, const char[] hex) {
 // ----------------- Internal Functions/Stocks
 
 void Bungee(int client, int num) {
-	if (CheckClass(client) && g_bCanRope[client][num]) {
-		int adminreq = g_cvarAdminReq.IntValue;
-		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
-			float ori[3];
-			float eyeOri[3];
-			float ang[3];
-			float eyeAng[3];
+	if (num >= MAXBUNGEECOUNT || num < 0) {
+		LogError("Invalid bungee value - Array index out of bounds (%i).", num);
+		return;
+	}
+	if (!CheckClass(client) || !g_bCanRope[client][num]) {
+		return;
+	}
+	int adminreq = g_cvarAdminReq.IntValue;
+	if (adminreq != -1 && !IsUserAdmin(client, adminreq)) {
+		return;
+	}
 
-			GetClientAbsOrigin(client, ori);
-			ori[2] += g_cvarHeightOffset.FloatValue;
-			GetClientEyePosition(client, eyeOri);
-			GetClientAbsAngles(client, ang);
-			GetClientEyeAngles(client, eyeAng);
+	float ori[3];
+	float eyeOri[3];
+	float ang[3];
+	float eyeAng[3];
 
-			Handle tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
-			if (TR_DidHit(tr)) {
-				g_iRopeHookedEnt[client][num] = TR_GetEntityIndex(tr);
-				bool go = true;
-				if (IsValidEntity(g_iRopeHookedEnt[client][num])) {
-					char entName[128];
-					GetEntPropString(g_iRopeHookedEnt[client][num], Prop_Data, "m_iName", entName, sizeof(entName));
-					if (!g_bDoHook) {
-						if (StrContains(entName, "nohook") != -1) {
-							go = false;
-						}
-					}
-					else {
-						go = (StrContains(entName, "dohook") != -1);
-					}
-				}
-				if (go) {
-					if (g_iRopeHookedEnt[client][num] > 0) {
-						Entity_GetAbsOrigin(g_iRopeHookedEnt[client][num], g_fHookedEntLastLoc[client][num]);
-					}
-					else {
-						g_iRopeHookedEnt[client][num] = -1;
-					}
-					TR_GetEndPosition(g_fRopePoint[client][num], tr);
+	GetClientAbsOrigin(client, ori);
+	ori[2] += g_cvarHeightOffset.FloatValue;
+	GetClientEyePosition(client, eyeOri);
+	GetClientAbsAngles(client, ang);
+	GetClientEyeAngles(client, eyeAng);
 
-					g_fRopeDistance[client][num] = GetVectorDistance(ori, g_fRopePoint[client][num]);
+	Handle tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
+	if (!TR_DidHit(tr)) {
+		delete tr;
+		return;
+	}
 
-					if (g_fRopeDistance[client][num] > g_cvarRopeLength.FloatValue) {
-						g_bRoping[client][num] = false;
-					}
-					else {
-						g_fRopeDistance[client][num] += g_cvarRopeDisOffset.FloatValue;
-						g_bRoping[client][num] = true;
-					}
-				}
-				delete tr;
+	g_iRopeHookedEnt[client][num] = TR_GetEntityIndex(tr);
+	bool go = true;
+	if (IsValidEntity(g_iRopeHookedEnt[client][num])) {
+		char entName[128];
+		GetEntPropString(g_iRopeHookedEnt[client][num], Prop_Data, "m_iName", entName, sizeof(entName));
+		if (!g_bDoHook) {
+			if (StrContains(entName, "nohook") != -1) {
+				go = false;
 			}
 		}
+		else {
+			go = (StrContains(entName, "dohook") != -1);
+		}
 	}
+	if (go) {
+		if (g_iRopeHookedEnt[client][num] > 0) {
+			Entity_GetAbsOrigin(g_iRopeHookedEnt[client][num], g_fHookedEntLastLoc[client][num]);
+		}
+		else {
+			g_iRopeHookedEnt[client][num] = -1;
+		}
+		TR_GetEndPosition(g_fRopePoint[client][num], tr);
+
+		g_fRopeDistance[client][num] = GetVectorDistance(ori, g_fRopePoint[client][num]);
+
+		if (g_fRopeDistance[client][num] > g_cvarRopeLength.FloatValue) {
+			g_bRoping[client][num] = false;
+		}
+		else {
+			g_fRopeDistance[client][num] += g_cvarRopeDisOffset.FloatValue;
+			g_bRoping[client][num] = true;
+		}
+	}
+	delete tr;
 }
 
 void Unbungee(int client, int num) {
-	if (CheckClass(client)) {
-		int adminreq = g_cvarAdminReq.IntValue;
-		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
-			g_iRopeHookedEnt[client][num] = -1;
-			g_bRoping[client][num] = false;
-		}
+	if (!CheckClass(client)) {
+		return;
+	}
+	
+	int adminreq = g_cvarAdminReq.IntValue;
+	if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
+		g_iRopeHookedEnt[client][num] = -1;
+		g_bRoping[client][num] = false;
 	}	
 }
 
