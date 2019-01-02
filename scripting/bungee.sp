@@ -1,17 +1,30 @@
 #pragma semicolon 1
+
 #include <sourcemod>
 #include <tf2_stocks>
 #include <smlib/entities>
 #include <smlib/math>
+#include <clientprefs>
+#include <regex>
+#include "color_literals.inc"
+
 #pragma newdecls required
-#define PLUGIN_VERSION "1.0.4"
+
+#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_DESCRIPTION "Be the one and only spy-derman"
+
+enum {
+	BUNGEE1 = 0,
+	BUNGEE2,
+	MAXBUNGEECOUNT
+}
 
 float
-	  g_fRopePoint[MAXPLAYERS+1][2][3]
-	, g_fRopeDistance[MAXPLAYERS+1][2]
-	, g_fHookedEntLastLoc[MAXPLAYERS+1][2][3];
+	  g_fRopePoint[MAXPLAYERS+1][MAXBUNGEECOUNT][3]
+	, g_fRopeDistance[MAXPLAYERS+1][MAXBUNGEECOUNT]
+	, g_fHookedEntLastLoc[MAXPLAYERS+1][MAXBUNGEECOUNT][3];
 int
-	  g_iRopeHookedEnt[MAXPLAYERS+1][2]
+	  g_iRopeHookedEnt[MAXPLAYERS+1][MAXBUNGEECOUNT]
 	, g_iBeamSprite
 	, g_iHaloSprite
 	, g_iBeamRed[] = {255, 19, 19, 255}
@@ -19,95 +32,238 @@ int
 	, g_iBeamCustom[MAXPLAYERS+1][4];
 bool
 	  g_bDoHook
-	, g_bCanRope[MAXPLAYERS+1][2]
-	, g_bRoping[MAXPLAYERS+1][2]
+	, g_bCanRope[MAXPLAYERS+1][MAXBUNGEECOUNT]
+	, g_bRoping[MAXPLAYERS+1][MAXBUNGEECOUNT]
 	, g_bCustomColor[MAXPLAYERS+1];
 ConVar
-	  cvarRopeLength
-	, cvarHeightOffset
-	, cvarRopeExtend
-	, cvarRopePower
-	, cvarClassReq
-	, cvarRopeDisOffset
-	, cvarContractBoost
-	, cvarGroundRes
-	, cvarAdminReq;
+	  g_cvarRopeLength
+	, g_cvarHeightOffset
+	, g_cvarRopeExtend
+	, g_cvarRopePower
+	, g_cvarClassReq
+	, g_cvarRopeDisOffset
+	, g_cvarContractBoost
+	, g_cvarGroundRes
+	, g_cvarAdminReq;
+Handle
+	  g_hCookieBungee;
+Regex
+	  g_hRegexHex;
 
 public Plugin myinfo = {
 	name = "Spy-derman",
 	author = "CrancK",
-	description = "Be the one and only spy-derman",
+	description = PLUGIN_DESCRIPTION,
 	version = PLUGIN_VERSION,
 	url = "https://github.com/JoinedSenses"
 };
 
+// ----------------- SM API
+
 public void OnPluginStart() {
-	RegConsoleCmd("+bungee", Command_Bungee);
-	RegConsoleCmd("-bungee", Command_UnBungee);
-	RegConsoleCmd("+bungee2", Command_Bungee2);
-	RegConsoleCmd("-bungee2", Command_UnBungee2);
-	RegConsoleCmd("sm_bcolor", Command_BColor);
+	RegConsoleCmd("+bungee", cmdBungee1);
+	RegConsoleCmd("-bungee", cmdUnbungee1);
+	RegConsoleCmd("+bungee2", cmdBungee2);
+	RegConsoleCmd("-bungee2", cmdUnbungee2);
+	RegConsoleCmd("sm_bcolor", cmdColor);
 
-	CreateConVar("sm_bungee_version", PLUGIN_VERSION, "Bungee Version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
+	CreateConVar("sm_bungee_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION, FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY).SetString(PLUGIN_VERSION);
 
-	cvarRopeLength = CreateConVar("sm_bungee_length", "768.0", "maximum length per bungee", 0);
-	cvarHeightOffset = CreateConVar("sm_bungee_heightoffset", "36.0", "...");
-	cvarRopeExtend = CreateConVar("sm_bungee_extendfactor", "3.5", "...");
-	cvarRopePower = CreateConVar("sm_bungee_power", "1.0", "...");
-	cvarRopeDisOffset = CreateConVar("sm_bungee_disoffset", "0.0", "...");
-	cvarContractBoost = CreateConVar("sm_bungee_contractboost", "1.01", "...");
-	cvarGroundRes = CreateConVar("sm_bungee_groundresistance", "0.85", "...");
-	cvarAdminReq = CreateConVar("sm_bungee_adminreq", "-1	", "0=generic, 1=custom3, -1=off");
-	cvarClassReq = CreateConVar("sm_bungee_classreq", "spy", "name of class allowed to bungee");
+	g_cvarRopeLength = CreateConVar("sm_bungee_length", "768.0", "maximum length per bungee", 0);
+	g_cvarHeightOffset = CreateConVar("sm_bungee_heightoffset", "36.0", "...");
+	g_cvarRopeExtend = CreateConVar("sm_bungee_extendfactor", "3.5", "...");
+	g_cvarRopePower = CreateConVar("sm_bungee_power", "1.0", "...");
+	g_cvarRopeDisOffset = CreateConVar("sm_bungee_disoffset", "0.0", "...");
+	g_cvarContractBoost = CreateConVar("sm_bungee_contractboost", "1.01", "...");
+	g_cvarGroundRes = CreateConVar("sm_bungee_groundresistance", "0.85", "...");
+	g_cvarAdminReq = CreateConVar("sm_bungee_adminreq", "-1", "0=generic, 1=custom3, -1=off");
+	g_cvarClassReq = CreateConVar("sm_bungee_classreq", "spy", "name of class allowed to bungee");
+
+	g_hCookieBungee = RegClientCookie("Bungee_Color", "Bungee_Color", CookieAccess_Private);
+
+	g_hRegexHex = new Regex("([A-Fa-f0-9]{6})");
 
 	HookEntityOutput("trigger_teleport", "OnStartTouch", EntityOutput_OnTrigger);
 
-	initialize();
+	Initialize();
+
+	for (int i = 1; i <= MaxClients; i++) {
+		if (IsClientInGame(i) && AreClientCookiesCached(i)) {
+			OnClientCookiesCached(i);
+		}
+	}
+}
+
+public void OnClientConnected(int client) {
+	g_bCustomColor[client] = false;
+}
+
+public void OnClientCookiesCached(int client) {
+	GetCookieColor(client, g_iBeamCustom[client]);
 }
 
 public void OnMapStart() {
-	initialize();
+	Initialize();
 }
 
-public Action Command_BColor(int client, int args) {
+public void OnGameFrame() {
+	float extend = g_cvarRopeExtend.FloatValue;
+	float power = g_cvarRopePower.FloatValue;
+	float height = g_cvarHeightOffset.FloatValue;
+	float boost = g_cvarContractBoost.FloatValue;
+	float groundRes = g_cvarGroundRes.FloatValue;
+
+	for (int i = 1; i < MaxClients; i++) {
+		if (IsValidClient(i)) {
+			bool active;
+			for (int j = 0; j < MAXBUNGEECOUNT; j++) {
+				if (g_bRoping[i][j]) {
+					active = true;
+					break;
+				}
+			}
+
+			if (!active) {
+				return;
+			}
+
+			float ori[3];
+			float vel[3];
+			float dis[MAXBUNGEECOUNT] = {-1.0, -1.0};
+			float tempVec[MAXBUNGEECOUNT][3];
+			bool go[MAXBUNGEECOUNT];
+
+			GetClientAbsOrigin(i, ori);
+			ori[2] += height;
+
+			Entity_GetAbsVelocity(i, vel);
+
+			for (int j = 0; j < MAXBUNGEECOUNT; j++) {
+				if (g_bRoping[i][j] && IsValidEntity(g_iRopeHookedEnt[i][j])) {
+					float tempLoc[3];
+					Entity_GetAbsOrigin(g_iRopeHookedEnt[i][j], tempLoc);
+
+					if (!Math_VectorsEqual(g_fHookedEntLastLoc[i][j], tempLoc)) {
+						float tempDiff[3];
+						SubtractVectors(tempLoc, g_fHookedEntLastLoc[i][j], tempDiff);
+						AddVectors(g_fRopePoint[i][j], tempDiff, g_fRopePoint[i][j]);
+						g_fHookedEntLastLoc[i][j] = tempLoc;
+					}
+				}
+
+				dis[j] = GetVectorDistance(ori, g_fRopePoint[i][j]);
+
+				if ((extend == -1.0 || dis[j] < g_fRopeDistance[i][j]*extend) && g_bRoping[i][j] && dis[j] != -1.0) {
+					if (dis[j] > g_fRopeDistance[i][j]) {
+						SubtractVectors(g_fRopePoint[i][j], ori, tempVec[j]);
+						NormalizeVector(tempVec[j], tempVec[j]);
+
+						float tempDis = dis[j] - g_fRopeDistance[i][j];
+						ScaleVector(tempVec[j], tempDis);
+
+						if (power != 1.0) {
+							ScaleVector(tempVec[j], power);
+						}
+
+						if (GetEntityFlags(i) & FL_ONGROUND) {
+							ScaleVector(tempVec[j], groundRes);
+						}
+						go[j] = true;
+					}
+					BeamIt(i, ori, j);
+				}
+				else {
+					g_bRoping[i][j] = false;
+				}
+			}
+
+			if (go[BUNGEE1] && go[BUNGEE2]) {
+				AddVectors(tempVec[BUNGEE1], tempVec[BUNGEE2], tempVec[BUNGEE1]);
+				if (boost != 1.0) {
+					ScaleVector(vel, boost);
+				}
+				AddVectors(tempVec[BUNGEE1], vel, vel);
+				Entity_SetAbsVelocity(i, vel);
+			}
+			else if (go[BUNGEE1] && !go[BUNGEE2]) {
+				if (boost != 1.0) {
+					ScaleVector(vel, boost);
+				}
+				AddVectors(tempVec[BUNGEE1], vel, vel);
+				Entity_SetAbsVelocity(i, vel);
+			}
+			else if (!go[BUNGEE1] && go[BUNGEE2]) {
+				if (boost != 1.0) {
+					ScaleVector(vel, boost);
+				}
+				AddVectors(tempVec[BUNGEE2], vel, vel);
+				Entity_SetAbsVelocity(i, vel);
+			}
+		}
+	}
+}
+
+// ----------------- Commands
+
+public Action cmdBungee1(int client, int args) {
+	Bungee(client, BUNGEE1);
+	return Plugin_Handled;
+}
+
+public Action cmdUnbungee1(int client, int args) {
+	Unbungee(client, BUNGEE1);
+	return Plugin_Handled;
+}
+
+public Action cmdBungee2(int client, int args) {
+	Bungee(client, BUNGEE2);
+	return Plugin_Handled;
+}
+
+public Action cmdUnbungee2(int client, int args) {
+	Unbungee(client, BUNGEE2);
+	return Plugin_Handled;
+}
+
+public Action cmdColor(int client, int args) {
 	if (client == 0) {
-		ReplyToCommand(client, "[Bungee] Cannot use this command as console");
+		PrintColoredChat(client, "[Bungee] Cannot use this command as console");
 		return Plugin_Handled;
 	}
 	if (args == 0) {
-		ReplyToCommand(client, "\x01[\x03Bungee\x01] Usage: sm_bcolor <hex>");
+		PrintColoredChat(client, "\x01[\x03Bungee\x01] Usage: sm_bcolor <hex>");
 		return Plugin_Handled;
 	}
 	char hex[16];
 	GetCmdArg(1, hex, sizeof(hex));
-	if (strlen(hex) != 6) {
-		ReplyToCommand(client, "\x01[\x03Bungee\x01] Error: expected hex string with 6 characters.");
+
+	if (!IsValidHex(hex)) {
+		PrintColoredChat(client, "\x01[\x03Speedo\x01] Invalid hex value");
 		return Plugin_Handled;
 	}
-	
-	int hexInt = StringToInt(hex, 16);
-	int r,g,b;
-	r = ((hexInt >> 16) & 0xFF);
-	g = ((hexInt >> 8) & 0xFF);
-	b = ((hexInt >> 0) & 0xFF);
-	
-	g_iBeamCustom[client][0] = r;
-	g_iBeamCustom[client][1] = g;
-	g_iBeamCustom[client][2] = b;
-	g_iBeamCustom[client][3] = 255;
 
-	PrintToChat(client, "\x01[\x03Bungee\x01]    \x07%s%s\x01    | \x07%02X0000R: %i\x01 | \x0700%02X00G: %i\x01 | \x070000%02XB: %i", hex, hex, r, r, g, g, b, b);
+	int rgba[4];
+	HexStrToRGB(hex, rgba);
+
+	int r = rgba[0];
+	int g = rgba[1];
+	int b = rgba[2];
+
+	PrintColoredChat(client, "\x01[\x03Bungee\x01]  \x07%s%s\x01  | \x07%02X0000R: %i\x01 | \x0700%02X00G: %i\x01 | \x070000%02XB: %i", hex, hex, r, r, g, g, b, b);
 
 	if (r < 10 && g < 10 && b < 10) {
 		g_bCustomColor[client] = false;
-		ReplyToCommand(client, "\x01[\x03Bungee\x01] Unable to use this value. At least one RGB value must be greater than 10");
+		PrintColoredChat(client, "\x01[\x03Bungee\x01] Unable to use this value. At least one RGB value must be greater than 10");
 		return Plugin_Handled;
 	}
 
+	g_iBeamCustom[client] = rgba;
 	g_bCustomColor[client] = true;
-
+	SetCookieColor(client, hex);
 	return Plugin_Handled;
 }
+
+// ----------------- Hooks
 
 public void EntityOutput_OnTrigger(const char[] output, int caller, int activator, float delay) {
 	if (!(0 < activator <= MaxClients)) {
@@ -116,7 +272,7 @@ public void EntityOutput_OnTrigger(const char[] output, int caller, int activato
 	char activatorClassName[128];
 	GetEdictClassname(caller, activatorClassName, sizeof(activatorClassName));
 	if (CheckClass(activator) && StrEqual(activatorClassName, "trigger_teleport")) {
-		for (int i = 0; i < 2; i++) {
+		for (int i = 0; i < MAXBUNGEECOUNT; i++) {
 			if (g_bRoping[activator][i]) {
 				g_bRoping[activator][i] = false;
 				g_iRopeHookedEnt[activator][i] = -1;
@@ -127,254 +283,117 @@ public void EntityOutput_OnTrigger(const char[] output, int caller, int activato
 	}
 }
 
-public Action CanRope1(Handle timer, Handle client) {
-	g_bCanRope[client][0] = true;
+// ----------------- Timers
+
+Action CanRope1(Handle timer, Handle client) {
+	g_bCanRope[client][BUNGEE1] = true;
 	return Plugin_Handled;
 }
 
-public Action CanRope2(Handle timer, Handle client) {
-	g_bCanRope[client][1] = true;
+Action CanRope2(Handle timer, Handle client) {
+	g_bCanRope[client][BUNGEE2] = true;
 	return Plugin_Handled;
 }
 
-public Action Command_Bungee(int client, int args) {
-	if (CheckClass(client) && g_bCanRope[client][0]) {
-		int adminreq = GetConVarInt(cvarAdminReq);
-		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
-			float ori[3];
-			float eyeOri[3];
-			float ang[3];
-			float eyeAng[3];
-
-			GetClientAbsOrigin(client, ori);
-			ori[2] += GetConVarFloat(cvarHeightOffset);
-			GetClientEyePosition(client, eyeOri);
-			GetClientAbsAngles(client, ang);
-			GetClientEyeAngles(client, eyeAng);
-
-			Handle tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
-			if (TR_DidHit(tr)) {
-				g_iRopeHookedEnt[client][0] = TR_GetEntityIndex(tr);
-				bool go = true;
-				if (IsValidEntity(g_iRopeHookedEnt[client][0])) {
-					char entName[128];
-					GetEntPropString(g_iRopeHookedEnt[client][0], Prop_Data, "m_iName", entName, sizeof(entName));
-					if (!g_bDoHook) {
-						if (StrContains(entName, "nohook") != -1) {
-							go = false;
-						}
-					}
-					else {
-						go = (StrContains(entName, "dohook") != -1);
-					}
-				}
-				if (go) {
-					if (g_iRopeHookedEnt[client][0] > 0) {
-						Entity_GetAbsOrigin(g_iRopeHookedEnt[client][0], g_fHookedEntLastLoc[client][0]);
-					}
-					else {
-						g_iRopeHookedEnt[client][0] = -1;
-					}
-					TR_GetEndPosition(g_fRopePoint[client][0], tr);
-
-					g_fRopeDistance[client][0] = GetVectorDistance(ori, g_fRopePoint[client][0]);
-
-					if (g_fRopeDistance[client][0] > GetConVarFloat(cvarRopeLength)) {
-						g_bRoping[client][0] = false;
-					}
-					else {
-						g_fRopeDistance[client][0] += GetConVarFloat(cvarRopeDisOffset);
-						g_bRoping[client][0] = true;
-					}
-				}
-				delete tr;
-			}
-		}
-	}
-	return Plugin_Handled;
-}
-
-public Action Command_UnBungee(int client, int args) {
-	if (CheckClass(client)) {
-		int adminreq = GetConVarInt(cvarAdminReq);
-		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
-			g_iRopeHookedEnt[client][0] = -1;
-			g_bRoping[client][0] = false;
-		}
-	}
-	return Plugin_Handled;
-}
-
-public Action Command_Bungee2(int client, int args) {
-	if (CheckClass(client) && g_bCanRope[client][1]) {
-		int adminreq = GetConVarInt(cvarAdminReq);
-		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
-			float ori[3];
-			float eyeOri[3];
-			float ang[3];
-			float eyeAng[3];
-
-			GetClientAbsOrigin(client, ori);
-			ori[2] += GetConVarFloat(cvarHeightOffset);
-			GetClientEyePosition(client, eyeOri);
-			GetClientAbsAngles(client, ang);
-			GetClientEyeAngles(client, eyeAng);
-
-			Handle tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
-
-			if (TR_DidHit(tr)) {
-				g_iRopeHookedEnt[client][1] = TR_GetEntityIndex(tr);
-				bool go = true;
-				if (IsValidEntity(g_iRopeHookedEnt[client][1])) {
-					char entName[128];
-					GetEntPropString(g_iRopeHookedEnt[client][1], Prop_Data, "m_iName", entName, sizeof(entName));
-
-					if (!g_bDoHook) {
-						if (StrContains(entName, "nohook") != -1) {
-							go = false;
-						}
-					}
-					else {
-						go = (StrContains(entName, "dohook") != -1);
-					}
-				}
-				if (go) {
-					if (g_iRopeHookedEnt[client][1] > 0) {
-						Entity_GetAbsOrigin(g_iRopeHookedEnt[client][1], g_fHookedEntLastLoc[client][1]);
-					}
-					else {
-						g_iRopeHookedEnt[client][1] = -1;
-					}
-
-					TR_GetEndPosition(g_fRopePoint[client][1], tr);
-					g_fRopeDistance[client][1] = GetVectorDistance(ori, g_fRopePoint[client][1]);
-
-					if (g_fRopeDistance[client][1] > GetConVarFloat(cvarRopeLength)) {
-						g_bRoping[client][1] = false;
-					}
-					else {
-						g_fRopeDistance[client][1] += GetConVarFloat(cvarRopeDisOffset);
-						g_bRoping[client][1] = true;
-					}
-				}
-				delete tr;
-			}
-		}
-	}
-	return Plugin_Handled;
-}
-
-public Action Command_UnBungee2(int client, int args) {
-	if (CheckClass(client)) {
-		int adminreq = GetConVarInt(cvarAdminReq);
-		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
-			g_iRopeHookedEnt[client][1] = -1;
-			g_bRoping[client][1] = false;
-		}
-	}
-	return Plugin_Handled;
-}
-
-public void OnGameFrame() {
-	float extend = cvarRopeExtend.FloatValue;
-	float power = cvarRopePower.FloatValue;
-	float height = cvarHeightOffset.FloatValue;
-	float boost = cvarContractBoost.FloatValue;
-	float groundRes = cvarGroundRes.FloatValue;
-
-	for (int i = 1; i < MaxClients; i++) {
-		if (IsClientInGame(i) && !IsFakeClient(i) && IsPlayerAlive(i) && (g_bRoping[i][0] || g_bRoping[i][1])) {
-			if (g_bRoping[i][0] || g_bRoping[i][1]) {
-				float ori[3];
-				float vel[3];
-				float dis[2] = { -1.0, -1.0 };
-				float tempVec[2][3];
-				bool go[2];
-				
-				GetClientAbsOrigin(i, ori);
-				ori[2] += height;
-
-				Entity_GetAbsVelocity(i, vel);
-
-				for (int j = 0; j < 2; j++) {
-					if (g_bRoping[i][j] && IsValidEntity(g_iRopeHookedEnt[i][j])) {
-						float tempLoc[3];
-						Entity_GetAbsOrigin(g_iRopeHookedEnt[i][j], tempLoc);
-						if (!Math_VectorsEqual(g_fHookedEntLastLoc[i][j], tempLoc)) {
-							float tempDiff[3];
-							SubtractVectors(tempLoc, g_fHookedEntLastLoc[i][j], tempDiff);
-							AddVectors(g_fRopePoint[i][j], tempDiff, g_fRopePoint[i][j]);
-							for (int k = 0; k < 3; k++) {
-								g_fHookedEntLastLoc[i][j][k] = tempLoc[k];
-							}
-						}
-					}
-					dis[j] = GetVectorDistance(ori, g_fRopePoint[i][j]);
-				}
-				for (int j = 0; j < 2; j++) {
-					if ((extend == -1.0 || dis[j] < g_fRopeDistance[i][j]*extend) && g_bRoping[i][j] && dis[j] != -1.0) {
-						if (dis[j] > g_fRopeDistance[i][j]) {
-							SubtractVectors(g_fRopePoint[i][j], ori, tempVec[j]);
-							NormalizeVector(tempVec[j], tempVec[j]);
-
-							float tempDis = dis[j] - g_fRopeDistance[i][j];
-							ScaleVector(tempVec[j], tempDis);
-
-							if (power != 1.0) {
-								ScaleVector(tempVec[j], power);
-							}
-							if (GetEntityFlags(i) & FL_ONGROUND) {
-								ScaleVector(tempVec[j], groundRes);
-							}
-							go[j] = true;
-						}
-						BeamIt(i, ori, j);
-					}
-					else {
-						g_bRoping[i][j] = false;
-					}
-				}
-				if (go[0] && go[1]) {
-					AddVectors(tempVec[0], tempVec[1], tempVec[0]);
-					if (boost != 1.0) {
-						ScaleVector(vel, boost);
-					}
-					AddVectors(tempVec[0], vel, vel);
-					Entity_SetAbsVelocity(i, vel);
-				}
-				else if (go[0] && !go[1]) {
-					if (boost != 1.0) {
-						ScaleVector(vel, boost);
-					}
-					AddVectors(tempVec[0], vel, vel);
-					Entity_SetAbsVelocity(i, vel);
-				}
-				else if (!go[0] && go[1]) {
-					if (boost != 1.0) {
-						ScaleVector(vel, boost);
-					}
-					AddVectors(tempVec[1], vel, vel);
-					Entity_SetAbsVelocity(i, vel);
-				}
-			}
-		}
-	}
-}
+// ----------------- TraceRay Filter
 
 bool TraceRayHitAnyThing(int entity, int mask, any startent) {
 	return (entity != startent);
 }
 
-void initialize() {
+// ----------------- Cookies
+
+void GetCookieColor(int client, int rgba[4]) {
+	char hex[7];
+	GetClientCookie(client, g_hCookieBungee, hex, sizeof(hex));
+	if (hex[0] != '\0') {
+		HexStrToRGB(hex, rgba);
+		g_bCustomColor[client] = true;
+	}
+}
+
+void SetCookieColor(int client, const char[] hex) {
+	SetClientCookie(client, g_hCookieBungee, hex);
+}
+
+// ----------------- Internal Functions/Stocks
+
+void Bungee(int client, int num) {
+	if (CheckClass(client) && g_bCanRope[client][num]) {
+		int adminreq = g_cvarAdminReq.IntValue;
+		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
+			float ori[3];
+			float eyeOri[3];
+			float ang[3];
+			float eyeAng[3];
+
+			GetClientAbsOrigin(client, ori);
+			ori[2] += g_cvarHeightOffset.FloatValue;
+			GetClientEyePosition(client, eyeOri);
+			GetClientAbsAngles(client, ang);
+			GetClientEyeAngles(client, eyeAng);
+
+			Handle tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
+			if (TR_DidHit(tr)) {
+				g_iRopeHookedEnt[client][num] = TR_GetEntityIndex(tr);
+				bool go = true;
+				if (IsValidEntity(g_iRopeHookedEnt[client][num])) {
+					char entName[128];
+					GetEntPropString(g_iRopeHookedEnt[client][num], Prop_Data, "m_iName", entName, sizeof(entName));
+					if (!g_bDoHook) {
+						if (StrContains(entName, "nohook") != -1) {
+							go = false;
+						}
+					}
+					else {
+						go = (StrContains(entName, "dohook") != -1);
+					}
+				}
+				if (go) {
+					if (g_iRopeHookedEnt[client][num] > 0) {
+						Entity_GetAbsOrigin(g_iRopeHookedEnt[client][num], g_fHookedEntLastLoc[client][num]);
+					}
+					else {
+						g_iRopeHookedEnt[client][num] = -1;
+					}
+					TR_GetEndPosition(g_fRopePoint[client][num], tr);
+
+					g_fRopeDistance[client][num] = GetVectorDistance(ori, g_fRopePoint[client][num]);
+
+					if (g_fRopeDistance[client][num] > g_cvarRopeLength.FloatValue) {
+						g_bRoping[client][num] = false;
+					}
+					else {
+						g_fRopeDistance[client][num] += g_cvarRopeDisOffset.FloatValue;
+						g_bRoping[client][num] = true;
+					}
+				}
+				delete tr;
+			}
+		}
+	}
+}
+
+void Unbungee(int client, int num) {
+	if (CheckClass(client)) {
+		int adminreq = g_cvarAdminReq.IntValue;
+		if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
+			g_iRopeHookedEnt[client][num] = -1;
+			g_bRoping[client][num] = false;
+		}
+	}	
+}
+
+void Initialize() {
 	for (int i = 1; i < MaxClients; i++) {
-		for (int j = 0; j < 2; j++) {
+		for (int j = 0; j < MAXBUNGEECOUNT; j++) {
 			g_bCanRope[i][j] = true;
 			g_fRopeDistance[i][j] = 0.0;
 			g_bRoping[i][j] = false;
 			g_iRopeHookedEnt[i][j] = -1;
+			g_fRopePoint[i][j] = NULL_VECTOR;
 
 			for (int k = 0; k < 3; k++) {
-				g_fRopePoint[i][j][k] = 0.0;
 				g_fHookedEntLastLoc[i][j][k] = -1.0;
 			}
 		}
@@ -382,6 +401,23 @@ void initialize() {
 	g_iBeamSprite = PrecacheModel("materials/sprites/laser.vmt");
 	g_iHaloSprite = PrecacheModel("materials/sprites/halo01.vmt");
 	CheckHook();
+}
+
+bool IsValidClient(int client) {
+	return (IsClientInGame(client) && !IsFakeClient(client) && IsPlayerAlive(client));
+}
+
+bool IsValidHex(const char[] hex) {
+	return (strlen(hex) == 6 && g_hRegexHex.Match(hex));
+}
+
+void HexStrToRGB(const char[] hexstr, int rgb[4]) {
+	int hex = StringToInt(hexstr, 16);
+
+	rgb[0] = ((hex >> 16) & 0xFF);
+	rgb[1] = ((hex >>  8) & 0xFF);
+	rgb[2] = ((hex >>  0) & 0xFF);
+	rgb[3] = 255;
 }
 
 void CheckHook() {
@@ -403,7 +439,7 @@ void BeamIt(int client, float ori[3], int nr) {
 }
 
 bool IsUserAdmin(int client, int type = 0) {
-	return GetAdminFlag(GetUserAdmin(client), type ? Admin_Custom3 : Admin_Generic);
+	return GetUserAdmin(client).HasFlag(type ? Admin_Custom3 : Admin_Generic);
 }
 
 bool CheckClass(int client) {
@@ -411,6 +447,6 @@ bool CheckClass(int client) {
 		return false;
 	}
 	char sClass[32];
-	cvarClassReq.GetString(sClass, sizeof(sClass));
+	g_cvarClassReq.GetString(sClass, sizeof(sClass));
 	return (TF2_GetPlayerClass(client) == TF2_GetClass(sClass) || TF2_GetClass(sClass) == TFClass_Unknown);
 }
