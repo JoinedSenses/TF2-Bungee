@@ -99,7 +99,9 @@ public void OnClientConnected(int client) {
 }
 
 public void OnClientCookiesCached(int client) {
-	GetCookieColor(client, g_iBeamCustom[client]);
+	if (CheckCommandAccess(client, "sm_bcolor", 0)) {
+		GetCookieColor(client, g_iBeamCustom[client]);	
+	}
 }
 
 public void OnMapStart() {
@@ -389,7 +391,7 @@ void Unbungee(int client, int num) {
 	if (!CheckClass(client)) {
 		return;
 	}
-	
+
 	int adminreq = g_cvarAdminReq.IntValue;
 	if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
 		g_iRopeHookedEnt[client][num] = -1;
