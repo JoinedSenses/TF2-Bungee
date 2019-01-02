@@ -177,6 +177,7 @@ public void OnGameFrame() {
 				}
 			}
 
+			// If additional bungees are ever added for whatever reason, this math here would need to be reworked. Everything else should be good.
 			if (go[BUNGEE1] && go[BUNGEE2]) {
 				AddVectors(tempVec[BUNGEE1], tempVec[BUNGEE2], tempVec[BUNGEE1]);
 				if (boost != 1.0) {
@@ -231,14 +232,14 @@ public Action cmdColor(int client, int args) {
 		return Plugin_Handled;
 	}
 	if (args == 0) {
-		PrintColoredChat(client, "\x01[\x03Bungee\x01] Usage: sm_bcolor <hex>");
+		PrintColoredChat(client, "[\x03Bungee\x01] Usage: sm_bcolor <hex>");
 		return Plugin_Handled;
 	}
 	char hex[16];
 	GetCmdArg(1, hex, sizeof(hex));
 
 	if (!IsValidHex(hex)) {
-		PrintColoredChat(client, "\x01[\x03Speedo\x01] Invalid hex value");
+		PrintColoredChat(client, "[\x03Speedo\x01] Invalid hex value");
 		return Plugin_Handled;
 	}
 
@@ -249,11 +250,11 @@ public Action cmdColor(int client, int args) {
 	int g = rgba[1];
 	int b = rgba[2];
 
-	PrintColoredChat(client, "\x01[\x03Bungee\x01]  \x07%s%s\x01  | \x07%02X0000R: %i\x01 | \x0700%02X00G: %i\x01 | \x070000%02XB: %i", hex, hex, r, r, g, g, b, b);
+	PrintColoredChat(client, "[\x03Bungee\x01]  \x07%s%s\x01  | \x07%02X0000R: %i\x01 | \x0700%02X00G: %i\x01 | \x070000%02XB: %i", hex, hex, r, r, g, g, b, b);
 
 	if (r < 10 && g < 10 && b < 10) {
 		g_bCustomColor[client] = false;
-		PrintColoredChat(client, "\x01[\x03Bungee\x01] Unable to use this value. At least one RGB value must be greater than 10");
+		PrintColoredChat(client, "[\x03Bungee\x01] Unable to use this value. At least one RGB value must be greater than 10");
 		return Plugin_Handled;
 	}
 
