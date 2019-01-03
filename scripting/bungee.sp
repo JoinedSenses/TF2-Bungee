@@ -102,7 +102,7 @@ public void OnClientConnected(int client) {
 
 public void OnClientCookiesCached(int client) {
 	if (CheckCommandAccess(client, "sm_bcolor", 0)) {
-		GetCookieColor(client, g_iBeamCustom[client]);	
+		GetCookieColor(client);	
 	}
 }
 
@@ -308,11 +308,11 @@ bool TraceRayHitAnyThing(int entity, int mask, any startent) {
 
 // ----------------- Cookies
 
-void GetCookieColor(int client, int rgba[4]) {
+void GetCookieColor(int client) {
 	char hex[7];
 	GetClientCookie(client, g_hCookieBungee, hex, sizeof(hex));
 	if (hex[0] != '\0') {
-		HexStrToRGB(hex, rgba);
+		HexStrToRGB(hex, g_iBeamCustom[client]);
 		g_bCustomColor[client] = true;
 	}
 }
