@@ -129,7 +129,7 @@ public void OnGameFrame() {
 			}
 		}
 		if (!active) {
-			return;
+			continue;
 		}
 
 		float ori[3];
