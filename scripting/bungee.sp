@@ -9,8 +9,9 @@
 #include <regex>
 #include "color_literals.inc"
 
-#define PLUGIN_VERSION "1.2.0"
+#define PLUGIN_VERSION "1.2.1"
 #define PLUGIN_DESCRIPTION "Be the one and only spy-derman"
+#define COMMAND_COLOR "sm_bcolor"
 
 enum {
 	BUNGEE1 = 0,
@@ -43,8 +44,7 @@ ConVar
 	, g_cvarClassReq
 	, g_cvarRopeDisOffset
 	, g_cvarContractBoost
-	, g_cvarGroundRes
-	, g_cvarAdminReq;
+	, g_cvarGroundRes;
 Handle
 	  g_hCookieBungee;
 Regex
@@ -61,14 +61,6 @@ public Plugin myinfo = {
 // ----------------- SM API
 
 public void OnPluginStart() {
-	RegConsoleCmd("+bungee", cmdBungee1);
-	RegConsoleCmd("-bungee", cmdUnbungee1);
-	RegConsoleCmd("+bungee2", cmdBungee2);
-	RegConsoleCmd("-bungee2", cmdUnbungee2);
-	//RegConsoleCmd("+bungee3", cmdBungee3);
-	//RegConsoleCmd("-bungee3", cmdUnbungee3);
-	RegConsoleCmd("sm_bcolor", cmdColor);
-
 	CreateConVar("sm_bungee_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION, FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY).SetString(PLUGIN_VERSION);
 
 	g_cvarRopeLength = CreateConVar("sm_bungee_length", "768.0", "maximum length per bungee", 0);
@@ -78,8 +70,15 @@ public void OnPluginStart() {
 	g_cvarRopeDisOffset = CreateConVar("sm_bungee_disoffset", "0.0", "...");
 	g_cvarContractBoost = CreateConVar("sm_bungee_contractboost", "1.01", "...");
 	g_cvarGroundRes = CreateConVar("sm_bungee_groundresistance", "0.85", "...");
-	g_cvarAdminReq = CreateConVar("sm_bungee_adminreq", "-1", "0=generic, 1=custom3, -1=off");
 	g_cvarClassReq = CreateConVar("sm_bungee_classreq", "spy", "name of class allowed to bungee");
+
+	RegConsoleCmd("+bungee", cmdBungee1);
+	RegConsoleCmd("-bungee", cmdUnbungee1);
+	RegConsoleCmd("+bungee2", cmdBungee2);
+	RegConsoleCmd("-bungee2", cmdUnbungee2);
+	//RegConsoleCmd("+bungee3", cmdBungee3);
+	//RegConsoleCmd("-bungee3", cmdUnbungee3);
+	RegConsoleCmd(COMMAND_COLOR, cmdColor);
 
 	g_hCookieBungee = RegClientCookie("Bungee_Color", "Bungee_Color", CookieAccess_Private);
 
@@ -101,7 +100,7 @@ public void OnClientConnected(int client) {
 }
 
 public void OnClientCookiesCached(int client) {
-	if (CheckCommandAccess(client, "sm_bcolor", 0)) {
+	if (CheckCommandAccess(client, COMMAND_COLOR, 0)) {
 		GetCookieColor(client);	
 	}
 }
@@ -117,7 +116,7 @@ public void OnGameFrame() {
 	float boost = g_cvarContractBoost.FloatValue;
 	float groundRes = g_cvarGroundRes.FloatValue;
 
-	for (int client = 1; client < MaxClients; client++) {
+	for (int client = 1; client <= MaxClients; client++) {
 		if (!IsValidClient(client)) {
 			continue;
 		}
@@ -236,7 +235,7 @@ public Action cmdColor(int client, int args) {
 	GetCmdArg(1, hex, sizeof(hex));
 
 	if (!IsValidHex(hex)) {
-		PrintColoredChat(client, "[\x03Speedo\x01] Invalid hex value");
+		PrintColoredChat(client, "[\x03Bungee\x01] Invalid hex value");
 		return Plugin_Handled;
 	}
 
@@ -331,10 +330,6 @@ void Bungee(int client, int num) {
 	if (!CheckClass(client) || !g_bCanRope[client][num]) {
 		return;
 	}
-	int adminreq = g_cvarAdminReq.IntValue;
-	if (adminreq != -1 && !IsUserAdmin(client, adminreq)) {
-		return;
-	}
 
 	float ori[3];
 	float eyeOri[3];
@@ -394,11 +389,8 @@ void Unbungee(int client, int num) {
 		return;
 	}
 
-	int adminreq = g_cvarAdminReq.IntValue;
-	if (adminreq == -1 || IsUserAdmin(client, adminreq)) {
-		g_iRopeHookedEnt[client][num] = -1;
-		g_bRoping[client][num] = false;
-	}	
+	g_iRopeHookedEnt[client][num] = -1;
+	g_bRoping[client][num] = false;	
 }
 
 void Initialize() {
@@ -453,10 +445,6 @@ void BeamIt(int client, float ori[3], int nr) {
 	beamColor = g_bCustomColor[client] ? g_iBeamCustom[client] : (GetClientTeam(client) == 2) ? g_iBeamRed : g_iBeamBlue;
 	TE_SetupBeamPoints(ori, g_fRopePoint[client][nr], g_iBeamSprite, g_iHaloSprite, 0, 0, 0.1, 8.0, 4.0, 1, 0.0, beamColor, 30);
 	TE_SendToAll();
-}
-
-bool IsUserAdmin(int client, int type = 0) {
-	return GetUserAdmin(client).HasFlag(type ? Admin_Custom3 : Admin_Generic);
 }
 
 bool CheckClass(int client) {
