@@ -282,7 +282,7 @@ public void EntityOutput_OnTrigger(const char[] output, int caller, int activato
 			DataPack dp = new DataPack();
 			dp.WriteCell(activator);
 			dp.WriteCell(i);
-			CreateTimer(0.1, CanRope, activator);
+			CreateTimer(0.1, CanRope, dp);
 			g_bCanRope[activator][i] = false;
 		}
 	}
