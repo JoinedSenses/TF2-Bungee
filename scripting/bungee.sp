@@ -1,4 +1,5 @@
 #pragma semicolon 1
+#pragma newdecls required
 
 #include <sourcemod>
 #include <tf2_stocks>
@@ -8,14 +9,13 @@
 #include <regex>
 #include "color_literals.inc"
 
-#pragma newdecls required
-
-#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_VERSION "1.2.0"
 #define PLUGIN_DESCRIPTION "Be the one and only spy-derman"
 
 enum {
 	BUNGEE1 = 0,
 	BUNGEE2,
+	//BUNGEE3,
 	MAXBUNGEECOUNT
 }
 
@@ -65,6 +65,8 @@ public void OnPluginStart() {
 	RegConsoleCmd("-bungee", cmdUnbungee1);
 	RegConsoleCmd("+bungee2", cmdBungee2);
 	RegConsoleCmd("-bungee2", cmdUnbungee2);
+	//RegConsoleCmd("+bungee3", cmdBungee3);
+	//RegConsoleCmd("-bungee3", cmdUnbungee3);
 	RegConsoleCmd("sm_bcolor", cmdColor);
 
 	CreateConVar("sm_bungee_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION, FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY).SetString(PLUGIN_VERSION);
@@ -115,11 +117,11 @@ public void OnGameFrame() {
 	float boost = g_cvarContractBoost.FloatValue;
 	float groundRes = g_cvarGroundRes.FloatValue;
 
-	for (int i = 1; i < MaxClients; i++) {
-		if (IsValidClient(i)) {
+	for (int client = 1; client < MaxClients; client++) {
+		if (IsValidClient(client)) {
 			bool active;
-			for (int j = 0; j < MAXBUNGEECOUNT; j++) {
-				if (g_bRoping[i][j]) {
+			for (int i = 0; i < MAXBUNGEECOUNT; i++) {
+				if (g_bRoping[client][i]) {
 					active = true;
 					break;
 				}
@@ -133,74 +135,57 @@ public void OnGameFrame() {
 			float vel[3];
 			float dis[MAXBUNGEECOUNT] = {-1.0, -1.0};
 			float tempVec[MAXBUNGEECOUNT][3];
-			bool go[MAXBUNGEECOUNT];
+			float resultVec[3];
 
-			GetClientAbsOrigin(i, ori);
+			GetClientAbsOrigin(client, ori);
 			ori[2] += height;
 
-			Entity_GetAbsVelocity(i, vel);
+			Entity_GetAbsVelocity(client, vel);
 
-			for (int j = 0; j < MAXBUNGEECOUNT; j++) {
-				if (g_bRoping[i][j] && IsValidEntity(g_iRopeHookedEnt[i][j])) {
+			for (int i = 0; i < MAXBUNGEECOUNT; i++) {
+				if (g_bRoping[client][i] && IsValidEntity(g_iRopeHookedEnt[client][i])) {
 					float tempLoc[3];
-					Entity_GetAbsOrigin(g_iRopeHookedEnt[i][j], tempLoc);
+					Entity_GetAbsOrigin(g_iRopeHookedEnt[client][i], tempLoc);
 
-					if (!Math_VectorsEqual(g_fHookedEntLastLoc[i][j], tempLoc)) {
+					if (!Math_VectorsEqual(g_fHookedEntLastLoc[client][i], tempLoc)) {
 						float tempDiff[3];
-						SubtractVectors(tempLoc, g_fHookedEntLastLoc[i][j], tempDiff);
-						AddVectors(g_fRopePoint[i][j], tempDiff, g_fRopePoint[i][j]);
-						g_fHookedEntLastLoc[i][j] = tempLoc;
+						SubtractVectors(tempLoc, g_fHookedEntLastLoc[client][i], tempDiff);
+						AddVectors(g_fRopePoint[client][i], tempDiff, g_fRopePoint[client][i]);
+						g_fHookedEntLastLoc[client][i] = tempLoc;
 					}
 				}
 
-				dis[j] = GetVectorDistance(ori, g_fRopePoint[i][j]);
+				dis[i] = GetVectorDistance(ori, g_fRopePoint[client][i]);
 
-				if ((extend == -1.0 || dis[j] < g_fRopeDistance[i][j]*extend) && g_bRoping[i][j] && dis[j] != -1.0) {
-					if (dis[j] > g_fRopeDistance[i][j]) {
-						SubtractVectors(g_fRopePoint[i][j], ori, tempVec[j]);
-						NormalizeVector(tempVec[j], tempVec[j]);
+				if ((extend == -1.0 || dis[i] < g_fRopeDistance[client][i]*extend) && g_bRoping[client][i] && dis[i] != -1.0) {
+					if (dis[i] > g_fRopeDistance[client][i]) {
+						SubtractVectors(g_fRopePoint[client][i], ori, tempVec[i]);
+						NormalizeVector(tempVec[i], tempVec[i]);
 
-						float tempDis = dis[j] - g_fRopeDistance[i][j];
-						ScaleVector(tempVec[j], tempDis);
+						ScaleVector(tempVec[i], (dis[i] - g_fRopeDistance[client][i]));
 
 						if (power != 1.0) {
-							ScaleVector(tempVec[j], power);
+							ScaleVector(tempVec[i], power);
 						}
 
-						if (GetEntityFlags(i) & FL_ONGROUND) {
-							ScaleVector(tempVec[j], groundRes);
+						if (GetEntityFlags(client) & FL_ONGROUND) {
+							ScaleVector(tempVec[i], groundRes);
 						}
-						go[j] = true;
+						AddVectors(resultVec, tempVec[i], resultVec);
 					}
-					BeamIt(i, ori, j);
+					BeamIt(client, ori, i);
 				}
 				else {
-					g_bRoping[i][j] = false;
+					g_bRoping[client][i] = false;
 				}
 			}
 
-			// If additional bungees are ever added for whatever reason, this math here would need to be reworked. Everything else should be good.
-			if (go[BUNGEE1] && go[BUNGEE2]) {
-				AddVectors(tempVec[BUNGEE1], tempVec[BUNGEE2], tempVec[BUNGEE1]);
+			if (!IsVectorZero(resultVec)) {
 				if (boost != 1.0) {
 					ScaleVector(vel, boost);
 				}
-				AddVectors(tempVec[BUNGEE1], vel, vel);
-				Entity_SetAbsVelocity(i, vel);
-			}
-			else if (go[BUNGEE1] && !go[BUNGEE2]) {
-				if (boost != 1.0) {
-					ScaleVector(vel, boost);
-				}
-				AddVectors(tempVec[BUNGEE1], vel, vel);
-				Entity_SetAbsVelocity(i, vel);
-			}
-			else if (!go[BUNGEE1] && go[BUNGEE2]) {
-				if (boost != 1.0) {
-					ScaleVector(vel, boost);
-				}
-				AddVectors(tempVec[BUNGEE2], vel, vel);
-				Entity_SetAbsVelocity(i, vel);
+				AddVectors(resultVec, vel, vel);
+				Entity_SetAbsVelocity(client, vel);
 			}
 		}
 	}
@@ -228,12 +213,22 @@ public Action cmdUnbungee2(int client, int args) {
 	return Plugin_Handled;
 }
 
+//public Action cmdBungee3(int client, int args) {
+//	Bungee(client, BUNGEE3);
+//	return Plugin_Handled;
+//}
+
+//public Action cmdUnbungee3(int client, int args) {
+//	Unbungee(client, BUNGEE3);
+//	return Plugin_Handled;
+//}
+
 public Action cmdColor(int client, int args) {
-	if (client == 0) {
+	if (!client) {
 		PrintColoredChat(client, "[Bungee] Cannot use this command as console");
 		return Plugin_Handled;
 	}
-	if (args == 0) {
+	if (!args) {
 		PrintColoredChat(client, "[\x03Bungee\x01] Usage: sm_bcolor <hex>");
 		return Plugin_Handled;
 	}
@@ -272,16 +267,20 @@ public void EntityOutput_OnTrigger(const char[] output, int caller, int activato
 	if (!(0 < activator <= MaxClients)) {
 		return;
 	}
+
 	char activatorClassName[128];
 	GetEdictClassname(caller, activatorClassName, sizeof(activatorClassName));
-	if (CheckClass(activator) && StrEqual(activatorClassName, "trigger_teleport")) {
-		for (int i = 0; i < MAXBUNGEECOUNT; i++) {
-			if (g_bRoping[activator][i]) {
-				g_bRoping[activator][i] = false;
-				g_iRopeHookedEnt[activator][i] = -1;
-				CreateTimer(0.1, i ? CanRope2 : CanRope1, activator);
-				g_bCanRope[activator][i] = false;
-			}
+
+	if (!CheckClass(activator) || !StrEqual(activatorClassName, "trigger_teleport")) {
+		return;
+	}
+
+	for (int i = 0; i < MAXBUNGEECOUNT; i++) {
+		if (g_bRoping[activator][i]) {
+			g_bRoping[activator][i] = false;
+			g_iRopeHookedEnt[activator][i] = -1;
+			CreateTimer(0.1, i ? CanRope2 : CanRope1, activator);
+			g_bCanRope[activator][i] = false;
 		}
 	}
 }
@@ -464,4 +463,8 @@ bool CheckClass(int client) {
 	char sClass[32];
 	g_cvarClassReq.GetString(sClass, sizeof(sClass));
 	return (TF2_GetPlayerClass(client) == TF2_GetClass(sClass) || TF2_GetClass(sClass) == TFClass_Unknown);
+}
+
+bool IsVectorZero(float vec[3]) {
+	return (vec[0] == 0.0 && vec[1] == 0.0 && vec[2] == 0.0);
 }
