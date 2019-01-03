@@ -118,75 +118,75 @@ public void OnGameFrame() {
 	float groundRes = g_cvarGroundRes.FloatValue;
 
 	for (int client = 1; client < MaxClients; client++) {
-		if (IsValidClient(client)) {
-			bool active;
-			for (int i = 0; i < MAXBUNGEECOUNT; i++) {
-				if (g_bRoping[client][i]) {
-					active = true;
-					break;
+		if (!IsValidClient(client)) {
+			continue;
+		}
+		bool active;
+		for (int i = 0; i < MAXBUNGEECOUNT; i++) {
+			if (g_bRoping[client][i]) {
+				active = true;
+				break;
+			}
+		}
+		if (!active) {
+			return;
+		}
+
+		float ori[3];
+		float vel[3];
+		float dis[MAXBUNGEECOUNT] = {-1.0, -1.0};
+		float tempVec[MAXBUNGEECOUNT][3];
+		float resultVec[3];
+
+		GetClientAbsOrigin(client, ori);
+		ori[2] += height;
+
+		Entity_GetAbsVelocity(client, vel);
+
+		for (int i = 0; i < MAXBUNGEECOUNT; i++) {
+			if (g_bRoping[client][i] && IsValidEntity(g_iRopeHookedEnt[client][i])) {
+				float tempLoc[3];
+				Entity_GetAbsOrigin(g_iRopeHookedEnt[client][i], tempLoc);
+
+				if (!Math_VectorsEqual(g_fHookedEntLastLoc[client][i], tempLoc)) {
+					float tempDiff[3];
+					SubtractVectors(tempLoc, g_fHookedEntLastLoc[client][i], tempDiff);
+					AddVectors(g_fRopePoint[client][i], tempDiff, g_fRopePoint[client][i]);
+					g_fHookedEntLastLoc[client][i] = tempLoc;
 				}
 			}
 
-			if (!active) {
-				return;
-			}
+			dis[i] = GetVectorDistance(ori, g_fRopePoint[client][i]);
 
-			float ori[3];
-			float vel[3];
-			float dis[MAXBUNGEECOUNT] = {-1.0, -1.0};
-			float tempVec[MAXBUNGEECOUNT][3];
-			float resultVec[3];
+			if ((extend == -1.0 || dis[i] < g_fRopeDistance[client][i]*extend) && g_bRoping[client][i] && dis[i] != -1.0) {
+				if (dis[i] > g_fRopeDistance[client][i]) {
+					SubtractVectors(g_fRopePoint[client][i], ori, tempVec[i]);
+					NormalizeVector(tempVec[i], tempVec[i]);
 
-			GetClientAbsOrigin(client, ori);
-			ori[2] += height;
+					ScaleVector(tempVec[i], (dis[i] - g_fRopeDistance[client][i]));
 
-			Entity_GetAbsVelocity(client, vel);
-
-			for (int i = 0; i < MAXBUNGEECOUNT; i++) {
-				if (g_bRoping[client][i] && IsValidEntity(g_iRopeHookedEnt[client][i])) {
-					float tempLoc[3];
-					Entity_GetAbsOrigin(g_iRopeHookedEnt[client][i], tempLoc);
-
-					if (!Math_VectorsEqual(g_fHookedEntLastLoc[client][i], tempLoc)) {
-						float tempDiff[3];
-						SubtractVectors(tempLoc, g_fHookedEntLastLoc[client][i], tempDiff);
-						AddVectors(g_fRopePoint[client][i], tempDiff, g_fRopePoint[client][i]);
-						g_fHookedEntLastLoc[client][i] = tempLoc;
+					if (power != 1.0) {
+						ScaleVector(tempVec[i], power);
 					}
-				}
 
-				dis[i] = GetVectorDistance(ori, g_fRopePoint[client][i]);
-
-				if ((extend == -1.0 || dis[i] < g_fRopeDistance[client][i]*extend) && g_bRoping[client][i] && dis[i] != -1.0) {
-					if (dis[i] > g_fRopeDistance[client][i]) {
-						SubtractVectors(g_fRopePoint[client][i], ori, tempVec[i]);
-						NormalizeVector(tempVec[i], tempVec[i]);
-
-						ScaleVector(tempVec[i], (dis[i] - g_fRopeDistance[client][i]));
-
-						if (power != 1.0) {
-							ScaleVector(tempVec[i], power);
-						}
-
-						if (GetEntityFlags(client) & FL_ONGROUND) {
-							ScaleVector(tempVec[i], groundRes);
-						}
-						AddVectors(resultVec, tempVec[i], resultVec);
+					if (GetEntityFlags(client) & FL_ONGROUND) {
+						ScaleVector(tempVec[i], groundRes);
 					}
-					BeamIt(client, ori, i);
+					AddVectors(resultVec, tempVec[i], resultVec);
 				}
-				else {
-					g_bRoping[client][i] = false;
-				}
+				BeamIt(client, ori, i);
 			}
+			else {
+				g_bRoping[client][i] = false;
+			}
+		}
 
-			if (!IsVectorZero(resultVec)) {
-				if (boost != 1.0) {
-					ScaleVector(vel, boost);
-				}
-				AddVectors(resultVec, vel, vel);
-				Entity_SetAbsVelocity(client, vel);
+		if (!IsVectorZero(resultVec)) {
+			if (boost != 1.0) {
+				ScaleVector(vel, boost);
 			}
+			AddVectors(resultVec, vel, vel);
+			Entity_SetAbsVelocity(client, vel);
 		}
 	}
 }
