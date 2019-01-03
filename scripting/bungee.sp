@@ -278,12 +278,13 @@ public void EntityOutput_OnTrigger(const char[] output, int caller, int activato
 	for (int i = 0; i < MAXBUNGEECOUNT; i++) {
 		if (g_bRoping[activator][i]) {
 			g_bRoping[activator][i] = false;
+			g_bCanRope[activator][i] = false;
 			g_iRopeHookedEnt[activator][i] = -1;
+
 			DataPack dp = new DataPack();
 			dp.WriteCell(activator);
 			dp.WriteCell(i);
 			CreateTimer(0.1, CanRope, dp);
-			g_bCanRope[activator][i] = false;
 		}
 	}
 }
