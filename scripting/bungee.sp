@@ -279,7 +279,10 @@ public void EntityOutput_OnTrigger(const char[] output, int caller, int activato
 		if (g_bRoping[activator][i]) {
 			g_bRoping[activator][i] = false;
 			g_iRopeHookedEnt[activator][i] = -1;
-			CreateTimer(0.1, i ? CanRope2 : CanRope1, activator);
+			DataPack dp = new DataPack();
+			dp.WriteCell(activator);
+			dp.WriteCell(i);
+			CreateTimer(0.1, CanRope, activator);
 			g_bCanRope[activator][i] = false;
 		}
 	}
@@ -287,13 +290,12 @@ public void EntityOutput_OnTrigger(const char[] output, int caller, int activato
 
 // ----------------- Timers
 
-Action CanRope1(Handle timer, Handle client) {
-	g_bCanRope[client][BUNGEE1] = true;
-	return Plugin_Handled;
-}
-
-Action CanRope2(Handle timer, Handle client) {
-	g_bCanRope[client][BUNGEE2] = true;
+Action CanRope(Handle timer, DataPack dp) {
+	dp.Reset();
+	int client = dp.ReadCell();
+	int bungee = dp.ReadCell();
+	delete dp;
+	g_bCanRope[client][bungee] = true;
 	return Plugin_Handled;
 }
 
