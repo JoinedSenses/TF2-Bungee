@@ -9,7 +9,7 @@
 #include <regex>
 #include "color_literals.inc"
 
-#define PLUGIN_VERSION "1.2.1"
+#define PLUGIN_VERSION "1.2.2"
 #define PLUGIN_DESCRIPTION "Be the one and only spy-derman"
 #define COMMAND_COLOR "sm_bcolor"
 
@@ -333,13 +333,11 @@ void Bungee(int client, int num) {
 
 	float ori[3];
 	float eyeOri[3];
-	float ang[3];
 	float eyeAng[3];
 
 	GetClientAbsOrigin(client, ori);
 	ori[2] += g_cvarHeightOffset.FloatValue;
 	GetClientEyePosition(client, eyeOri);
-	GetClientAbsAngles(client, ang);
 	GetClientEyeAngles(client, eyeAng);
 
 	Handle tr = TR_TraceRayFilterEx(eyeOri, eyeAng, MASK_SHOT_HULL, RayType_Infinite, TraceRayHitAnyThing, client);
